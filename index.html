@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fraction Division — Slice & Conquer</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1923;
+    --surface: #162230;
+    --card: #1e3045;
+    --accent1: #ff6b35;
+    --accent2: #ffd166;
+    --accent3: #06d6a0;
+    --accent4: #118ab2;
+    --text: #f0f4f8;
+    --muted: #8ba5be;
+    --radius: 16px;
+    --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Nunito', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at 20% 50%, rgba(17,138,178,0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(255,107,53,0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 60% 80%, rgba(6,214,160,0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ===== SCREENS ===== */
+  .screen { display: none; position: relative; z-index: 1; }
+  .screen.active { display: flex; }
+
+  /* ===== INTRO SCREEN ===== */
+  #intro {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+    text-align: center;
+    gap: 24px;
+  }
+
+  .logo-area { animation: floatIn 0.8s ease both; }
+
+  .logo-pizza {
+    font-size: 80px;
+    display: block;
+    animation: spin 20s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  h1 {
+    font-family: 'Fredoka One', cursive;
+    font-size: clamp(2.4rem, 6vw, 4rem);
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.1;
+  }
+
+  .tagline {
+    font-size: 1.1rem;
+    color: var(--muted);
+    max-width: 420px;
+  }
+
+  .level-select {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 8px;
+  }
+
+  .level-btn {
+    padding: 12px 24px;
+    border: 2px solid transparent;
+    border-radius: 50px;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 800;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--card);
+    color: var(--text);
+  }
+
+  .level-btn[data-level="1"] { border-color: var(--accent3); }
+  .level-btn[data-level="2"] { border-color: var(--accent2); }
+  .level-btn[data-level="3"] { border-color: var(--accent1); }
+  .level-btn.selected[data-level="1"] { background: var(--accent3); color: #0f1923; }
+  .level-btn.selected[data-level="2"] { background: var(--accent2); color: #0f1923; }
+  .level-btn.selected[data-level="3"] { background: var(--accent1); color: #fff; }
+  .level-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+
+  .start-btn {
+    padding: 16px 48px;
+    border-radius: 50px;
+    border: none;
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    color: #1a1a1a;
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.4rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(255,107,53,0.4);
+  }
+  .start-btn:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 8px 28px rgba(255,107,53,0.5); }
+
+  /* ===== GAME SCREEN ===== */
+  #game {
+    flex-direction: column;
+    min-height: 100vh;
+    padding: 16px;
+    gap: 16px;
+  }
+
+  /* HUD */
+  .hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .hud-score {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.4rem;
+    color: var(--accent2);
+  }
+
+  .hud-lives { display: flex; gap: 4px; font-size: 1.4rem; }
+
+  .hud-level {
+    font-weight: 800;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  .progress-bar-wrap {
+    height: 6px;
+    background: var(--surface);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent4), var(--accent3));
+    border-radius: 99px;
+    transition: width 0.5s ease;
+  }
+
+  /* QUESTION CARD */
+  .question-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: var(--shadow);
+  }
+
+  .q-label {
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .q-expression {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .frac {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.5rem;
+    line-height: 1;
+  }
+
+  .frac-num, .frac-den {
+    padding: 2px 8px;
+  }
+
+  .frac-line {
+    width: 100%;
+    height: 3px;
+    background: var(--text);
+    border-radius: 2px;
+  }
+
+  .op-sign {
+    font-family: 'Fredoka One', cursive;
+    font-size: 2rem;
+    color: var(--accent1);
+  }
+
+  .q-hint {
+    font-size: 0.88rem;
+    color: var(--accent3);
+    font-weight: 700;
+    padding: 8px 12px;
+    background: rgba(6,214,160,0.08);
+    border-radius: 10px;
+    border-left: 3px solid var(--accent3);
+  }
+
+  /* CONCEPT BOX */
+  .concept-box {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .concept-title {
+    font-size: 0.8rem;
+    color: var(--accent2);
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .flip-steps {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 1rem;
+  }
+
+  .flip-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .flip-label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .arrow-right { font-size: 1.4rem; color: var(--accent1); }
+
+  /* VISUAL AREA */
+  .visual-area {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .vis-title {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .vis-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Pizza visual */
+  .pizza-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .pizza-label {
+    font-size: 0.85rem;
+    color: var(--muted);
+    min-width: 80px;
+    font-weight: 700;
+  }
+
+  .pizzas-wrap {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  svg.pizza-svg {
+    width: 64px;
+    height: 64px;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
+  }
+
+  /* Bar visual */
+  .bar-visual {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .bar-label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    min-width: 60px;
+    font-weight: 700;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 32px;
+    background: var(--bg);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .bar-filled {
+    height: 100%;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: rgba(0,0,0,0.7);
+    transition: width 0.6s ease;
+    position: relative;
+  }
+
+  .bar-segment {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 800;
+    border-right: 2px solid rgba(0,0,0,0.2);
+    flex: none;
+  }
+
+  .bar-segment:last-child { border-right: none; }
+
+  /* Answer choices */
+  .answer-section {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .answer-label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .choices-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .choice-btn {
+    background: var(--card);
+    border: 2px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.18s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Nunito', sans-serif;
+  }
+
+  .choice-btn:hover:not(:disabled) {
+    border-color: var(--accent4);
+    background: rgba(17,138,178,0.15);
+    transform: translateY(-2px);
+  }
+
+  .choice-btn.correct {
+    border-color: var(--accent3);
+    background: rgba(6,214,160,0.15);
+    animation: pulse-correct 0.4s ease;
+  }
+
+  .choice-btn.wrong {
+    border-color: var(--accent1);
+    background: rgba(255,107,53,0.15);
+    animation: shake 0.4s ease;
+  }
+
+  @keyframes pulse-correct {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+  }
+
+  .choice-frac {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.3rem;
+  }
+
+  .choice-word {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  /* FEEDBACK OVERLAY */
+  .feedback {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10,15,20,0.85);
+    backdrop-filter: blur(4px);
+  }
+
+  .feedback.active { display: flex; }
+
+  .feedback-card {
+    background: var(--card);
+    border-radius: 24px;
+    padding: 32px 36px;
+    text-align: center;
+    max-width: 340px;
+    width: 90%;
+    box-shadow: var(--shadow);
+    animation: popIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+
+  @keyframes popIn {
+    from { transform: scale(0.7); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  .feedback-emoji { font-size: 3.5rem; margin-bottom: 8px; }
+
+  .feedback-title {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.8rem;
+    margin-bottom: 8px;
+  }
+
+  .feedback-title.correct { color: var(--accent3); }
+  .feedback-title.wrong { color: var(--accent1); }
+
+  .feedback-explain {
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+
+  .feedback-explain strong {
+    color: var(--accent2);
+  }
+
+  .next-btn {
+    padding: 12px 32px;
+    border-radius: 50px;
+    border: none;
+    background: linear-gradient(135deg, var(--accent4), var(--accent3));
+    color: #fff;
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .next-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(6,214,160,0.3); }
+
+  /* RESULTS SCREEN */
+  #results {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+    text-align: center;
+    gap: 20px;
+  }
+
+  .results-emoji { font-size: 5rem; }
+
+  .results-title {
+    font-family: 'Fredoka One', cursive;
+    font-size: 2.5rem;
+    background: linear-gradient(135deg, var(--accent2), var(--accent1));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .results-score {
+    font-family: 'Fredoka One', cursive;
+    font-size: 4rem;
+    color: var(--accent3);
+  }
+
+  .results-detail {
+    color: var(--muted);
+    font-size: 1rem;
+  }
+
+  .results-stars { font-size: 2.5rem; }
+
+  .results-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+
+  .retry-btn {
+    padding: 14px 36px;
+    border-radius: 50px;
+    border: 2px solid var(--accent3);
+    background: transparent;
+    color: var(--accent3);
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .retry-btn:hover { background: var(--accent3); color: #0f1923; }
+
+  /* Confetti */
+  .confetti-piece {
+    position: fixed;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    animation: confettiFall linear both;
+    z-index: 200;
+    pointer-events: none;
+  }
+
+  @keyframes confettiFall {
+    0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+  }
+
+  @keyframes floatIn {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  /* Tooltip / info popups */
+  .info-bubble {
+    background: var(--card);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 0.82rem;
+    color: var(--text);
+    margin-top: 12px;
+    line-height: 1.5;
+  }
+
+  .info-bubble b { color: var(--accent2); }
+
+  /* Responsive */
+  @media (min-width: 600px) {
+    #game { max-width: 600px; margin: 0 auto; }
+    .choices-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== INTRO SCREEN ===== -->
+<div id="intro" class="screen active">
+  <div class="logo-area">
+    <span class="logo-pizza">🍕</span>
+  </div>
+  <div>
+    <h1>Slice &amp;<br>Conquer</h1>
+    <p class="tagline">Master fraction division through pizza, bars, and visual magic!</p>
+  </div>
+
+  <div>
+    <p style="font-size:0.85rem; color:var(--muted); margin-bottom:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;">Choose Difficulty</p>
+    <div class="level-select">
+      <button class="level-btn selected" data-level="1">🌱 Starter</button>
+      <button class="level-btn" data-level="2">🔥 Medium</button>
+      <button class="level-btn" data-level="3">⚡ Expert</button>
+    </div>
+  </div>
+
+  <div class="concept-box" style="max-width:420px; width:100%;">
+    <div class="concept-title">💡 The Big Idea</div>
+    <div style="font-size:0.95rem; line-height:1.6; color:var(--muted);">
+      Dividing by a fraction = <strong style="color:var(--accent2);">multiplying by its reciprocal</strong>.<br>
+      Flip the second fraction and multiply!<br>
+      <span style="color:var(--accent3); font-size:1.1rem; font-weight:800;">a/b ÷ c/d = a/b × d/c</span>
+    </div>
+  </div>
+
+  <button class="start-btn" onclick="startGame()">Start Playing →</button>
+</div>
+
+<!-- ===== GAME SCREEN ===== -->
+<div id="game" class="screen">
+  <div class="progress-bar-wrap">
+    <div class="progress-bar" id="progressBar" style="width:0%"></div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-score">⭐ <span id="scoreDisplay">0</span></div>
+    <div class="hud-level" id="levelDisplay">Level 1 · Q1/5</div>
+    <div class="hud-lives" id="livesDisplay">❤️❤️❤️</div>
+  </div>
+
+  <div class="question-card">
+    <div class="q-label">🎯 Solve this</div>
+    <div class="q-expression" id="questionExpr"></div>
+    <div class="q-hint" id="questionHint"></div>
+  </div>
+
+  <div class="concept-box">
+    <div class="concept-title">🔄 Remember: Keep → Change → Flip</div>
+    <div class="flip-steps" id="flipSteps"></div>
+  </div>
+
+  <div class="visual-area">
+    <div class="vis-title">📊 Visual Explanation</div>
+    <div class="vis-container" id="visualContainer"></div>
+  </div>
+
+  <div class="answer-section">
+    <div class="answer-label">👆 Pick the answer</div>
+    <div class="choices-grid" id="choicesGrid"></div>
+  </div>
+</div>
+
+<!-- ===== RESULTS SCREEN ===== -->
+<div id="results" class="screen">
+  <div class="results-emoji" id="resultsEmoji">🏆</div>
+  <div class="results-title" id="resultsTitle">Fantastic!</div>
+  <div class="results-stars" id="resultsStars">⭐⭐⭐</div>
+  <div class="results-score"><span id="finalScore">0</span> pts</div>
+  <div class="results-detail" id="resultsDetail"></div>
+  <div class="results-actions">
+    <button class="retry-btn" onclick="restartSameLevel()">🔄 Play Again</button>
+    <button class="start-btn" onclick="goHome()" style="padding:14px 28px; font-size:1rem;">🏠 Home</button>
+  </div>
+</div>
+
+<!-- ===== FEEDBACK OVERLAY ===== -->
+<div class="feedback" id="feedback">
+  <div class="feedback-card">
+    <div class="feedback-emoji" id="feedbackEmoji">🎉</div>
+    <div class="feedback-title" id="feedbackTitle">Correct!</div>
+    <div class="feedback-explain" id="feedbackExplain"></div>
+    <button class="next-btn" id="nextBtn" onclick="nextQuestion()">Next →</button>
+  </div>
+</div>
+
+<script>
+// ===== DATA =====
+
+const QUESTIONS = {
+  1: [ // Starter — simple unit fractions
+    { n1:1,d1:2, n2:1,d2:4, context:"You have half a pizza. Each serving is 1/4. How many servings?" },
+    { n1:1,d1:2, n2:1,d2:2, context:"Half a chocolate bar divided into halves — how many pieces?" },
+    { n1:3,d1:4, n2:1,d2:4, context:"3/4 of a ribbon cut into 1/4 pieces. How many pieces?" },
+    { n1:2,d1:3, n2:1,d2:3, context:"2/3 of a pizza divided into thirds. How many slices?" },
+    { n1:1,d1:2, n2:1,d2:6, context:"Half a pie divided into 1/6 portions. How many portions?" },
+  ],
+  2: [ // Medium
+    { n1:3,d1:4, n2:1,d2:2, context:"3/4 litre of juice poured into 1/2 litre cups. How many cups?" },
+    { n1:2,d1:3, n2:2,d2:3, context:"2/3 kg of flour split into 2/3 kg bags. How many bags?" },
+    { n1:5,d1:6, n2:1,d2:3, context:"5/6 of a path covered in 1/3 sections. How many sections?" },
+    { n1:3,d1:5, n2:3,d2:10, context:"3/5 metre ribbon cut into 3/10 m pieces. How many pieces?" },
+    { n1:7,d1:8, n2:1,d2:4, context:"7/8 of a wall painted in 1/4 sections. How many sections?" },
+  ],
+  3: [ // Expert
+    { n1:5,d1:6, n2:2,d2:3, context:"5/6 ÷ 2/3 — simplify fully." },
+    { n1:7,d1:10, n2:7,d2:5, context:"7/10 ÷ 7/5 — what do you get?" },
+    { n1:4,d1:9, n2:2,d2:3, context:"4/9 divided by 2/3 — find the answer." },
+    { n1:5,d1:8, n2:5,d2:4, context:"5/8 ÷ 5/4 — simplify." },
+    { n1:11,d1:12, n2:1,d2:4, context:"11/12 of a tank filled in 1/4 turns. How many turns?" },
+  ]
+};
+
+// ===== STATE =====
+let level = 1, qIndex = 0, score = 0, lives = 3, correct = 0;
+let currentQ = null, answered = false;
+
+// ===== UTILS =====
+function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+
+function simplify(n, d) {
+  if (n === 0) return { n: 0, d: 1 };
+  const g = gcd(Math.abs(n), Math.abs(d));
+  return { n: n / g, d: d / g };
+}
+
+function fracStr(n, d) {
+  if (d === 1) return `${n}`;
+  return `${n}/${d}`;
+}
+
+function fracHTML(n, d, color='var(--text)') {
+  if (d === 1) return `<span style="font-family:'Fredoka One',cursive;font-size:1.5rem;color:${color}">${n}</span>`;
+  return `<span class="frac" style="color:${color}">
+    <span class="frac-num">${n}</span>
+    <span class="frac-line" style="background:${color}"></span>
+    <span class="frac-den">${d}</span>
+  </span>`;
+}
+
+function computeAnswer(n1,d1,n2,d2) {
+  // a/b ÷ c/d = a*d / b*c
+  const rn = n1 * d2, rd = d1 * n2;
+  return simplify(rn, rd);
+}
+
+function wrongChoices(correctN, correctD) {
+  const choices = [{n:correctN, d:correctD, correct:true}];
+  const attempts = new Set([`${correctN}/${correctD}`]);
+  const pool = [
+    {n:correctN+1, d:correctD}, {n:correctN-1, d:correctD},
+    {n:correctN, d:correctD+1}, {n:correctN*2, d:correctD},
+    {n:correctN, d:correctD*2}, {n:correctD, d:correctN},
+    {n:correctN+2, d:correctD}, {n:correctN, d:Math.max(1,correctD-1)},
+  ];
+  for (const p of pool) {
+    if (choices.length >= 4) break;
+    if (p.n <= 0 || p.d <= 0) continue;
+    const s = simplify(p.n, p.d);
+    const key = `${s.n}/${s.d}`;
+    if (attempts.has(key)) continue;
+    const corKey = `${correctN}/${correctD}`;
+    if (key === corKey) continue;
+    attempts.add(key);
+    choices.push({n:s.n, d:s.d, correct:false});
+  }
+  // Fill if needed
+  let extra = 1;
+  while (choices.length < 4) {
+    const k = `${correctN+extra*3}/${correctD+extra}`;
+    if (!attempts.has(k)) {
+      attempts.add(k);
+      choices.push({n:correctN+extra*3, d:correctD+extra, correct:false});
+    }
+    extra++;
+    if (extra > 20) break;
+  }
+  // Shuffle
+  for (let i = choices.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [choices[i], choices[j]] = [choices[j], choices[i]];
+  }
+  return choices;
+}
+
+// ===== LEVEL SELECT =====
+document.querySelectorAll('.level-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.level-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    level = parseInt(btn.dataset.level);
+  });
+});
+
+// ===== START =====
+function startGame() {
+  qIndex = 0; score = 0; lives = 3; correct = 0;
+  showScreen('game');
+  loadQuestion();
+}
+
+function restartSameLevel() {
+  qIndex = 0; score = 0; lives = 3; correct = 0;
+  showScreen('game');
+  loadQuestion();
+}
+
+function goHome() {
+  showScreen('intro');
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ===== LOAD QUESTION =====
+function loadQuestion() {
+  const questions = QUESTIONS[level];
+  if (qIndex >= questions.length) { showResults(); return; }
+
+  currentQ = questions[qIndex];
+  answered = false;
+
+  // Progress
+  const pct = (qIndex / questions.length) * 100;
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('levelDisplay').textContent = `Level ${level} · Q${qIndex+1}/${questions.length}`;
+  document.getElementById('scoreDisplay').textContent = score;
+
+  // Lives
+  const hearts = '❤️'.repeat(lives) + '🖤'.repeat(3 - lives);
+  document.getElementById('livesDisplay').textContent = hearts;
+
+  // Question expression
+  const {n1,d1,n2,d2,context} = currentQ;
+  const ans = computeAnswer(n1,d1,n2,d2);
+
+  document.getElementById('questionExpr').innerHTML =
+    fracHTML(n1,d1,'var(--accent2)') +
+    `<span class="op-sign">÷</span>` +
+    fracHTML(n2,d2,'var(--accent4)') +
+    `<span class="op-sign">=</span>` +
+    `<span style="font-family:'Fredoka One',cursive;font-size:1.8rem;color:var(--muted)">?</span>`;
+
+  document.getElementById('questionHint').textContent = '📖 ' + context;
+
+  // KCF steps
+  document.getElementById('flipSteps').innerHTML =
+    `<div class="flip-step"><div class="flip-label">Keep</div>${fracHTML(n1,d1,'var(--accent2)')}</div>` +
+    `<div class="arrow-right">→</div>` +
+    `<div class="flip-step"><div class="flip-label">Change ÷ to ×</div><span class="op-sign" style="font-size:1.5rem">×</span></div>` +
+    `<div class="arrow-right">→</div>` +
+    `<div class="flip-step"><div class="flip-label">Flip</div>${fracHTML(d2,n2,'var(--accent1)')}</div>` +
+    `<div class="arrow-right">=</div>` +
+    `<div class="flip-step"><div class="flip-label">Multiply</div>${fracHTML(n1*d2, d1*n2,'var(--accent3)')}</div>`;
+
+  // Visual
+  renderVisual(n1,d1,n2,d2,ans);
+
+  // Choices
+  const choices = wrongChoices(ans.n, ans.d);
+  const grid = document.getElementById('choicesGrid');
+  grid.innerHTML = '';
+  choices.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.innerHTML = `
+      <div class="choice-frac">${fracHTML(c.n, c.d)}</div>
+      <div class="choice-word">${c.d === 1 ? 'whole' : fracStr(c.n,c.d)}</div>`;
+    btn.dataset.correct = c.correct;
+    btn.addEventListener('click', () => handleAnswer(btn, c, ans, n1,d1,n2,d2));
+    grid.appendChild(btn);
+  });
+}
+
+// ===== VISUAL =====
+function renderVisual(n1,d1,n2,d2,ans) {
+  const vis = document.getElementById('visualContainer');
+  vis.innerHTML = '';
+
+  // ---- BAR VISUAL ----
+  const barDiv = document.createElement('div');
+  barDiv.className = 'bar-visual';
+
+  // Row 1: The whole (1)
+  barDiv.innerHTML += barRow('1 whole', 1, 1, 'var(--accent4)', '#fff');
+
+  // Row 2: The dividend (n1/d1)
+  barDiv.innerHTML += barRow(`${n1}/${d1}`, n1, d1, 'var(--accent2)', '#1a1a1a');
+
+  // Row 3: Divisor segments fitting into dividend
+  barDiv.innerHTML += barRowSegments(`÷ ${n2}/${d2}`, n1, d1, n2, d2, ans, 'var(--accent3)');
+
+  vis.appendChild(barDiv);
+
+  // ---- PIZZA VISUAL (only for simpler fractions) ----
+  if (d1 <= 8 && d2 <= 8 && level <= 2) {
+    const pizzaDiv = document.createElement('div');
+    pizzaDiv.innerHTML = `<div style="font-size:0.78rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;">🍕 Pizza View</div>`;
+
+    const pizzaRow = document.createElement('div');
+    pizzaRow.className = 'pizza-row';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'pizza-label';
+    lbl.textContent = `${n1}/${d1} pizza`;
+    pizzaRow.appendChild(lbl);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'pizzas-wrap';
+
+    // How many full divisor-pieces fit?
+    const count = ans.n / ans.d; // could be mixed
+    const fullPizzas = Math.floor(n1 * d2 / (d1 * n2));
+    const remN = (n1 * d2) - fullPizzas * (d1 * n2);
+    const remD = d1 * n2;
+    const rs = simplify(remN, remD);
+
+    for (let i = 0; i < Math.min(fullPizzas, 8); i++) {
+      wrap.innerHTML += pizzaSVG(d2, d2, ['var(--accent3)','#0f1923'], `Group ${i+1}`);
+    }
+    if (rs.n > 0 && rs.n < rs.d) {
+      wrap.innerHTML += pizzaSVG(rs.n, rs.d, ['var(--accent2)','#0f1923'], 'Remainder');
+    }
+
+    pizzaRow.appendChild(wrap);
+    pizzaDiv.appendChild(pizzaRow);
+
+    const info = document.createElement('div');
+    info.className = 'info-bubble';
+    info.innerHTML = `The <b>${n1}/${d1}</b> piece can be split into <b>${ans.n === ans.d ? ans.n : fracStr(ans.n,ans.d)}</b> groups of <b>${n2}/${d2}</b> each.`;
+    pizzaDiv.appendChild(info);
+
+    vis.appendChild(pizzaDiv);
+  }
+}
+
+function barRow(label, n, d, color, textColor) {
+  const pct = (n / d * 100).toFixed(1);
+  return `<div class="bar-row">
+    <div class="bar-label">${label}</div>
+    <div class="bar-track">
+      <div class="bar-filled" style="width:${pct}%;background:${color};color:${textColor}">
+        <span style="font-size:0.7rem;font-weight:800;padding:0 4px">${n}/${d}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function barRowSegments(label, n1,d1,n2,d2,ans, color) {
+  // How many segments of size n2/d2 fit into n1/d1?
+  const totalSegs = ans.n; // numerator after full simplification isn't always count...
+  // Better: raw count = n1*d2 / (d1*n2)
+  const rawN = n1 * d2, rawD = d1 * n2;
+  const g = gcd(rawN, rawD);
+  const sN = rawN / g, sD = rawD / g;
+  const fullSegs = Math.floor(rawN / rawD);
+  const pctPerSeg = (n2/d2) / (1) * 100; // as % of whole bar (whole = 1)
+  const pctFull = (n1/d1) * 100;
+
+  let segsHTML = '';
+  let usedPct = 0;
+  const colors = ['var(--accent3)','var(--accent4)','var(--accent2)','var(--accent1)','#a855f7','#ec4899'];
+
+  for (let i = 0; i < Math.min(fullSegs, 6); i++) {
+    const w = pctPerSeg;
+    segsHTML += `<div class="bar-segment" style="width:${w}%;background:${colors[i%colors.length]};color:#0f1923;font-size:0.65rem">${i+1}</div>`;
+    usedPct += w;
+  }
+  // Remainder
+  const remPct = pctFull - usedPct;
+  if (remPct > 0.5) {
+    segsHTML += `<div class="bar-segment" style="width:${remPct}%;background:rgba(255,209,102,0.5);color:#fff;font-size:0.6rem">rem</div>`;
+  }
+
+  return `<div class="bar-row">
+    <div class="bar-label">${label}</div>
+    <div class="bar-track">
+      <div style="display:flex;height:100%;width:${pctFull}%">${segsHTML}</div>
+    </div>
+  </div>`;
+}
+
+function pizzaSVG(filledSlices, totalSlices, [fillColor, strokeColor], title) {
+  const cx = 32, cy = 32, r = 28;
+  let paths = '';
+  const angleStep = (2 * Math.PI) / totalSlices;
+
+  for (let i = 0; i < totalSlices; i++) {
+    const startAngle = -Math.PI / 2 + i * angleStep;
+    const endAngle = startAngle + angleStep;
+    const x1 = cx + r * Math.cos(startAngle);
+    const y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle);
+    const y2 = cy + r * Math.sin(endAngle);
+    const large = angleStep > Math.PI ? 1 : 0;
+    const fill = i < filledSlices ? fillColor : 'rgba(255,255,255,0.05)';
+    paths += `<path d="M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${fill}" stroke="${strokeColor}" stroke-width="1.5"/>`;
+  }
+
+  return `<svg class="pizza-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+    <title>${title}</title>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    ${paths}
+    <circle cx="${cx}" cy="${cy}" r="3" fill="${strokeColor}"/>
+  </svg>`;
+}
+
+// ===== HANDLE ANSWER =====
+function handleAnswer(btn, choice, ans, n1,d1,n2,d2) {
+  if (answered) return;
+  answered = true;
+
+  const isCorrect = choice.correct;
+
+  // Mark buttons
+  document.querySelectorAll('.choice-btn').forEach(b => {
+    b.disabled = true;
+    if (b.dataset.correct === 'true') b.classList.add('correct');
+  });
+
+  if (isCorrect) {
+    score += level === 1 ? 10 : level === 2 ? 20 : 30;
+    correct++;
+    document.getElementById('scoreDisplay').textContent = score;
+    showFeedback(true, n1,d1,n2,d2,ans);
+  } else {
+    btn.classList.add('wrong');
+    lives--;
+    const hearts = '❤️'.repeat(Math.max(lives,0)) + '🖤'.repeat(3 - Math.max(lives,0));
+    document.getElementById('livesDisplay').textContent = hearts;
+    showFeedback(false, n1,d1,n2,d2,ans);
+  }
+}
+
+function showFeedback(isCorrect, n1,d1,n2,d2,ans) {
+  const fb = document.getElementById('feedback');
+  fb.classList.add('active');
+
+  const emojis_correct = ['🎉','🥳','🌟','🏆','✨','🎯'];
+  const emojis_wrong = ['😅','🤔','💡','📚','🔄','👀'];
+
+  document.getElementById('feedbackEmoji').textContent =
+    isCorrect ? emojis_correct[Math.floor(Math.random()*emojis_correct.length)]
+              : emojis_wrong[Math.floor(Math.random()*emojis_wrong.length)];
+
+  const titleEl = document.getElementById('feedbackTitle');
+  titleEl.textContent = isCorrect ? ['Correct!','Nailed it!','Brilliant!','Spot on!'][Math.floor(Math.random()*4)]
+                                   : ['Not quite…','Try again!','Almost!','Keep going!'][Math.floor(Math.random()*4)];
+  titleEl.className = 'feedback-title ' + (isCorrect ? 'correct' : 'wrong');
+
+  const simpleMult = simplify(n1*d2, d1*n2);
+  document.getElementById('feedbackExplain').innerHTML =
+    `<strong>${n1}/${d1} ÷ ${n2}/${d2}</strong><br>` +
+    `= ${n1}/${d1} × ${d2}/${n2}<br>` +
+    `= ${n1*d2}/${d1*n2}` +
+    (simpleMult.n !== n1*d2 || simpleMult.d !== d1*n2 ? ` = <strong>${simpleMult.n}/${simpleMult.d}</strong>` : `<br><strong>= ${simpleMult.n}/${simpleMult.d}</strong>`);
+
+  if (isCorrect) launchConfetti();
+
+  const nextLabel = qIndex + 1 >= QUESTIONS[level].length ? 'See Results →' : 'Next →';
+  document.getElementById('nextBtn').textContent = nextLabel;
+}
+
+function nextQuestion() {
+  document.getElementById('feedback').classList.remove('active');
+  qIndex++;
+  if (lives <= 0) { showResults(); return; }
+  loadQuestion();
+}
+
+// ===== RESULTS =====
+function showResults() {
+  showScreen('results');
+  const total = QUESTIONS[level].length;
+  const pct = correct / total;
+  let emoji = '🏆', title = 'Superstar!', stars = '⭐⭐⭐';
+  if (pct < 0.4) { emoji='📚'; title='Keep Practicing!'; stars='⭐'; }
+  else if (pct < 0.7) { emoji='💪'; title='Good Effort!'; stars='⭐⭐'; }
+
+  document.getElementById('resultsEmoji').textContent = emoji;
+  document.getElementById('resultsTitle').textContent = title;
+  document.getElementById('resultsStars').textContent = stars;
+  document.getElementById('finalScore').textContent = score;
+  document.getElementById('resultsDetail').textContent =
+    `${correct} / ${total} correct · Level ${level}`;
+
+  if (pct >= 0.7) launchConfetti(80);
+}
+
+// ===== CONFETTI =====
+function launchConfetti(count=40) {
+  const colors = ['#ff6b35','#ffd166','#06d6a0','#118ab2','#a855f7','#ec4899'];
+  for (let i = 0; i < count; i++) {
+    const div = document.createElement('div');
+    div.className = 'confetti-piece';
+    div.style.cssText = `
+      left: ${Math.random()*100}vw;
+      top: 0;
+      background: ${colors[Math.floor(Math.random()*colors.length)]};
+      width: ${6 + Math.random()*10}px;
+      height: ${6 + Math.random()*10}px;
+      border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
+      animation-duration: ${1.5 + Math.random()*2}s;
+      animation-delay: ${Math.random()*0.6}s;
+    `;
+    document.body.appendChild(div);
+    div.addEventListener('animationend', () => div.remove());
+  }
+}
+</script>
+</body>
+</html>
